@@ -77,37 +77,22 @@ io.on('connection', (socket) => {
 });
 
 // Endpoint HTTP para enviar eventos a usuarios conectados vía socket
-app.post('/events', (req, res) => {
-  const { userId, eventType, payload } = req.body;
+app.post('/emit', express.json(), (req, res) => {
+  const internalKey = req.headers['x-internal-key'];
 
-  // Validar campos obligatorios
-  if (!userId || !eventType) {
-    return res.status(400).json({
-      success: false,
-      error: 'Se requieren userId y eventType',
-      timestamp: new Date().toISOString()
-    });
+  if (internalKey !== process.env.SOCKET_KEY) {
+    return res.status(403).json({ error: 'Acceso no autorizado' });
   }
 
-  const isUserOnline = connectedUsers.has(userId);
+  const { userId, eventType, payload } = req.body;
 
-  // Emitir evento al socket del usuario especificado
-  io.to(userId).emit(eventType, {
-    ...payload,
-    metadata: {
-      ...(payload?.metadata || {}),
-      sentAt: new Date().toISOString(),
-      delivered: isUserOnline
-    }
-  });
+  if (!userId || !eventType || !payload) {
+    return res.status(400).json({ error: 'Datos incompletos' });
+  }
 
-  // Responder confirmando envío
-  res.json({
-    success: true,
-    message: 'Evento enviado',
-    delivered: isUserOnline,
-    timestamp: new Date().toISOString()
-  });
+  io.to(userId).emit(eventType, payload);
+
+  res.json({ success: true });
 });
 
 // Ruta simple para verificar que el servidor está activo
